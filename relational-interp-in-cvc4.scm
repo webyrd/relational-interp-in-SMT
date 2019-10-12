@@ -164,7 +164,9 @@
    (bapp (blam sa (blist (ssym sa) (blist (bquote (ssym squote)) (ssym sa))))
  (bquote (blam sa (blist (ssym sa) (blist (bquote (ssym squote)) (ssym sa)))))))
 
-(assert (= (just (sexpr quine)) (eval 100 empty-env quine)))
+(assert (= (just (sexpr quine)) (eval 8 empty-env quine)))
+
+(assert (= (just (sexpr t)) (eval 8 empty-env t)))
 
 ;;(assert (= (just a) (eval 4 empty-env t)))
 
