@@ -10,6 +10,7 @@
                      (sg)
                      (slambda)
                      (scons)
+                     (slist)
                      (squote)
                      )
                     ((nil)
@@ -61,21 +62,19 @@
        ((_ is cons) (tl (tl exp)))
        ((_ is nil) (tl (tl (tl exp))))))
 
+(define-fun is-list
+  ((exp Sexpr)) Bool
+  (and ((_ is cons) exp)
+       (= (hd exp) (ssym slist))
+       ((_ is cons) (tl exp))
+       ((_ is cons) (tl (tl exp)))
+       ((_ is nil) (tl (tl (tl exp))))))
+
 (define-fun is-app
   ((exp Sexpr)) Bool
   (and ((_ is cons) exp)
        ((_ is cons) (tl exp))
        ((_ is nil) (tl (tl exp)))))
-
-;; (define-fun-rec even
-;;   ((n Int)) Bool
-;;   (or (= n 0)
-;;        (not (odd (- n 1)))))
-
-;; (define-fun-rec odd
-;;   ((n Int)) Bool
-;;   (or (= n 1)
-;;       (not (even (- n 1)))))
 
 (define-fun-rec eval
   ((fuel Int)
@@ -87,24 +86,35 @@
        (just (sexpr (hd (tl exp))))
   (ite (is-lambda exp)
        (just (sclo (ssym-val (hd (hd (tl exp)))) (hd (tl (tl exp))) env))
-  (ite (is-kons exp)
+  ;; (ite (is-kons exp)
+  ;;      (let ((a (eval (- fuel 1) env (hd (tl exp))))
+  ;;            (d (eval (- fuel 2) env (hd (tl (tl exp))))))
+  ;;        (ite (and ((_ is just) a) ((_ is just) d)
+  ;;                  ((_ is sexpr) (just-v a))
+  ;;                  ((_ is sexpr) (just-v d))
+  ;;                  )
+  ;;             (just (sexpr (cons (sexpr-val (just-v a))
+  ;;                                (sexpr-val (just-v d)))))
+  ;;             (as nothing (Maybe Sval))))
+  (ite (is-list exp)
        (let ((a (eval (- fuel 1) env (hd (tl exp))))
-             (d (eval (- fuel 1) env (hd (tl (tl exp))))))
+             (d (eval (- fuel 2) env (hd (tl (tl exp))))))
          (ite (and ((_ is just) a) ((_ is just) d)
                    ((_ is sexpr) (just-v a))
                    ((_ is sexpr) (just-v d))
                    )
               (just (sexpr (cons (sexpr-val (just-v a))
-                                 (sexpr-val (just-v d)))))
+                                 (cons (sexpr-val (just-v d))
+                                       nil))))
               (as nothing (Maybe Sval))))
   (ite (is-app exp)
        (let ((f (eval (- fuel 1) env (hd exp)))
-             (a (eval (- fuel 1) env (hd (tl exp)))))
+             (a (eval (- fuel 2) env (hd (tl exp)))))
          (ite (and ((_ is just) f)
                    ((_ is just) a)
                    ((_ is sclo) (just-v f)))
              (eval
-              (- fuel 1)
+              (- fuel 3)
               (ext-env (sclo-id (just-v f))
                        (just-v a)
                        (sclo-env (just-v f)))
@@ -118,56 +128,57 @@
 (declare-const a Sval)
 (declare-const e Senv)
 (declare-const t Sexpr)
-(declare-const id Sexpr)
 
-;; (assert (= ma (eval 50 empty-env
-;;                       (cons (ssym squote) (cons nil nil))
-;;                     )))
-(assert (= id
+(define-const id Sexpr
+  (cons (ssym slambda)
+   (cons (cons (ssym sb) nil)
+         (cons (ssym sb) nil))))
 
-           
-                                           (cons
-                      (ssym slambda) ; A
-                      (cons
-                       (cons (ssym sb) nil) ; B
-                       (cons
-                        ;;(cons (ssym squote) (cons (ssym sc) nil))
-                        (ssym sb) ; C
-                        nil))) ; OP
-           ))
+(define-const qnil Sexpr
+  (cons (ssym squote) (cons nil nil)))
+
+(assert (not (= t (cons (ssym squote) (cons nil nil)))))
+(assert (not (is-quote t)))
+(assert (not (is-lambda t)))
+(assert (not (is-kons t)))
 
 
-(assert (= (just (sexpr t)) (eval 7 empty-env t)))
+;; ((lambda (_.0) (list _.0 (list 'quote _.0)))
+;;  '(lambda (_.0) (list _.0 (list 'quote _.0))))
+
+(define-fun bapp
+  ((f Sexpr) (a Sexpr)) Sexpr
+  (cons f (cons a nil)))
+(define-fun blam
+  ((x Ssym) (b Sexpr)) Sexpr
+  (cons (ssym slambda) (cons (cons (ssym x) nil) (cons b nil))))
+(define-fun blist
+  ((a Sexpr) (b Sexpr)) Sexpr
+  (cons (ssym slist) (cons a (cons b nil))))
+(define-fun bquote
+  ((x Sexpr)) Sexpr
+  (cons (ssym squote) (cons x nil)))
+
+(define-const
+ quine Sexpr
+   (bapp (blam sa (blist (ssym sa) (blist (bquote (ssym squote)) (ssym sa))))
+ (bquote (blam sa (blist (ssym sa) (blist (bquote (ssym squote)) (ssym sa)))))))
+
+(assert (= (just (sexpr quine)) (eval 100 empty-env quine)))
+
+;;(assert (= (just a) (eval 4 empty-env t)))
+
+;; (assert (= (just (sexpr t)) (eval 4 empty-env t)))
+
+;;(assert (= ma (eval 500 empty-env (cons id (cons id nil)))))
 
 ;;(assert (= ma (eval 500 empty-env (cons (cons id (cons id nil)) (cons id nil)))))
 
 ;;(assert (= ma (eval 500 empty-env (cons (cons id (cons id nil)) (cons id nil)))))
 
-;; (assert (= t (cons 
-;;               (cons
-;;                (ssym slambda) ; A
-;;                (cons
-;;                 (cons (ssym sa) nil) ; B
-;;                 (cons
-;;                  (ssym sa) ; C
-;;                  nil))) ; OP
-;;               (cons
-;;                nil ; OP
-;;                nil)
-;;               )))
+;;(assert (= ma (eval 500 empty-env (cons (ssym scons) (cons qnil (cons qnil nil))))))
 
-;;(assert (= ma (eval 50 empty-env t)))
-
-;; (assert
-;;  (= ma
-;;     (eval 100 empty-env
-;;           (cons (ssym scons)
-;;                 (cons
-;;                  (cons (ssym squote) (cons (ssym sa) nil))
-;;                  (cons
-;;                   (cons (ssym squote) (cons nil nil))
-;;                   nil))))))
-
+;;(assert (= ma (eval 500 empty-env (cons (ssym slist) (cons qnil (cons qnil nil))))))
 
 (check-sat)
 (get-model)
